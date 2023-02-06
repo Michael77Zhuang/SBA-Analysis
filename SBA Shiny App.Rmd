@@ -1,0 +1,280 @@
+---
+title: "STAT385 Final Project"
+author: "Caoxian Wang, Michael Zhuang, Yan Wang, Kang Ma, Jiaxiang Meng"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#Load in data
+library(shiny)
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(markdown)
+sba <- read_csv("https://uofi.box.com/shared/static/vi37omgitiaa2yyplrom779qvwk1g14x.csv", 
+    col_types = cols(ApprovalDate = col_date(format = "%d-%b-%y"), 
+        BalanceGross = col_number(), ChgOffDate = col_date(format = "%d-%b-%y"), 
+        ChgOffPrinGr = col_number(), DisbursementDate = col_date(format = "%d-%b-%y"), 
+        DisbursementGross = col_number(), 
+        GrAppv = col_number(), SBA_Appv = col_number()))
+
+```
+
+```{r}
+#ui panel
+ui = fluidPage(
+
+  titlePanel("Things affecting Loan Amount Approved by SBA"),
+  #Define NavBar
+  navbarPage("Navbar",
+  tabPanel("Loan Term",
+  sidebarLayout(
+  sidebarPanel(
+    #Create sliders for first plot
+    sliderInput(inputId = "slider_Term1",
+              label = "Loan Terms in Months",
+              min = min(sba$Term),
+              max = max(sba$Term),
+              value = c(min(sba$Term), max(sba$Term))
+              ),
+    sliderInput(inputId = "slider_NoEmp1",
+              label = "Number of Employees",
+              min = min(sba$NoEmp),
+              max = max(sba$NoEmp),
+              value = c(min(sba$NoEmp), max(sba$NoEmp))
+              ),
+    sliderInput(inputId = "slider_ApprovalFY1",
+                label = "Approval Year",
+                min = 1962,
+                max = 2014,
+                value = c(1962, 2014)
+                ),
+    #Create Text Input for state selection
+    textInput("text", label = h3("State"), value = "Enter State..."),
+    #Note for Text Input
+    tags$small("Note: Type the State Abbreviation (ex: IL)"),
+    #Create buttons for features selection
+    radioButtons("feature", label = h3("Feature"), choices = list("Urban Rural" = "UrbanRural", 
+                                                  "New Exist" = "NewExist"), selected = "UrbanRural"
+    ),
+    #Make action button for mean line
+    actionButton("action", label = "Mean Line")
+    ),
+  #Main panel output
+  mainPanel(
+  plotOutput(outputId = "Plot1")
+  )
+  )
+  ),
+  tabPanel("Number of Employees",
+  sidebarLayout(
+  sidebarPanel(
+    #Create sliders for second plot
+    sliderInput(inputId = "slider_Term2",
+              label = "Loan Terms in Months",
+              min = min(sba$Term),
+              max = max(sba$Term),
+              value = c(min(sba$Term), max(sba$Term))
+              ),
+    sliderInput(inputId = "slider_NoEmp2",
+              label = "Number of Employees",
+              min = min(sba$NoEmp),
+              max = max(sba$NoEmp),
+              value = c(min(sba$NoEmp), max(sba$NoEmp))
+              ),
+    sliderInput(inputId = "slider_ApprovalFY2",
+                label = "Approval Year",
+                min = 1962,
+                max = 2014,
+                value = c(1962, 2014)
+                ),
+    #Create Text Input for state selection
+    textInput("text2", label = h3("State"), value = "Enter State..."),
+    #Note for Text Input
+    tags$small("Note: Type the State Abbreviation (ex: IL)"),
+    #Create buttons for features selection
+    radioButtons("feature2", label = h3("Feature"), choices = list("Urban Rural" = "UrbanRural", 
+                                                  "New Exist" = "NewExist"), selected = "UrbanRural"
+    )
+    ),
+  #Main panel output
+  mainPanel(
+  plotOutput(outputId = "Plot2")
+  )
+  )           
+  ),
+  tabPanel("Approval_Year",
+  sidebarLayout(
+  sidebarPanel(
+    #Create sliders for third plot
+    sliderInput(inputId = "slider_Term3",
+              label = "Loan Terms in Months",
+              min = min(sba$Term),
+              max = max(sba$Term),
+              value = c(min(sba$Term), max(sba$Term))
+              ),
+    sliderInput(inputId = "slider_NoEmp3",
+              label = "Number of Employees",
+              min = min(sba$NoEmp),
+              max = max(sba$NoEmp),
+              value = c(min(sba$NoEmp), max(sba$NoEmp))
+              ),
+    sliderInput(inputId = "slider_ApprovalFY3",
+                label = "Approval Year",
+                min = 1962,
+                max = 2014,
+                value = c(1962, 2014)
+                ),
+    #Create Text Input for state selection
+    textInput("text3", label = h3("State"), value = "Enter State..."),
+    #Note for Text Input
+    tags$small("Note: Type the State Abbreviation (ex: IL)"),
+    #Create check box for subseting
+    checkboxGroupInput("category_13",
+    h3("UrbanRural"), choices = list("Urban" = 1, "Rural" = 2, "Undefined" = 0),
+    selected = c(0,1,2)),
+    checkboxGroupInput("category_23",
+    h3("NewExist"), choices = list("Existing Business" = 1, "New Business" = 2, "Undefined" = 0),
+    selected = c(0,1,2)),
+    #Make action button for minimum point
+    actionButton("min", label = "Minimum Point")
+  ),
+  #Main panel output
+  mainPanel(
+  plotOutput(outputId = "Plot3")
+  )
+  )
+  )
+  )
+)
+
+#Server function
+server = function(input, output, session) {
+  #Plot for Loan Term
+  output$Plot1 = renderPlot({
+    #Filtering data
+    sba_total1 = sba %>% select(State, Term, NoEmp, ApprovalFY, UrbanRural, NewExist, SBA_Appv) %>%
+          filter(input$slider_Term1[1] <= Term & Term <= input$slider_Term1[2],
+                 input$slider_NoEmp1[1] <= NoEmp & NoEmp <= input$slider_NoEmp1[2],
+                 input$slider_ApprovalFY1[1] <= ApprovalFY & ApprovalFY <= input$slider_ApprovalFY1[2],
+                 UrbanRural != 0, 
+                 NewExist != 0)
+#Check state input, only accept state abbreviation
+if (nchar(input$text) == 2){
+  sba_total1 = sba_total1 %>% filter(State == input$text)
+}
+
+#Deciding legend(UrbanRural or NewExist) to be displayed on plot    
+feature = input$feature    
+if (feature == "UrbanRural"){
+p = ggplot(sba_total1, aes(x = sba_total1$Term , y = sba_total1$SBA_Appv, color = factor(sba_total1$UrbanRural))) +  
+  geom_point(alpha = 0.5) + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"), axis.text.x = element_text(face="bold"), axis.text.y = element_text(face="bold"), axis.ticks = element_blank()) + 
+  scale_x_continuous(name = "Term Length", breaks=seq(0,600,100)) + 
+  scale_y_continuous(name = "Amount of Approved Loan") + 
+  scale_color_manual(name = "Region", labels = c("Urban", "Rural"), values = c("pink", "green"))}
+
+  else if (feature == "NewExist"){
+p = ggplot(sba_total1, aes(x = sba_total1$Term , y = sba_total1$SBA_Appv, color = factor(sba_total1$NewExist))) +  
+  geom_point(alpha = 0.5) + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"), axis.text.x = element_text(face="bold"), axis.text.y = element_text(face="bold"), axis.ticks = element_blank()) + 
+  scale_x_continuous(name = "Term Length", breaks=seq(0,600,100)) + 
+  scale_y_continuous(name = "Amount of Approved Loan") +
+  scale_color_manual(name = "NewExist", labels = c("Existing Business", "New Business"), values = c("orange", "lightblue"))
+  }
+
+#if else statement for action button. Mean line shows up when clicking odd number of times and disappear once clikcing even number of times.
+  if (input$action %% 2 == 0){
+  p
+  }
+  else {
+  p + stat_summary(fun.y=match.fun(mean), geom="line", colour="purple")
+  }
+  })
+
+  #Plot for Number of Employees
+  output$Plot2 = renderPlot({
+    #Filtering data for the second plot
+    sba_total2 = sba %>% select(State, Term, NoEmp, ApprovalFY, UrbanRural, NewExist, SBA_Appv) %>%
+          filter(input$slider_Term2[1] <= Term & Term <= input$slider_Term2[2],
+                 input$slider_NoEmp2[1] <= NoEmp & NoEmp <= input$slider_NoEmp2[2],
+                 input$slider_ApprovalFY2[1] <= ApprovalFY & ApprovalFY <= input$slider_ApprovalFY2[2],
+                 UrbanRural != 0,
+                 NewExist != 0)
+    
+#Check state input, only accept state abbreviation
+if (nchar(input$text2) == 2){
+  sba_total2 = sba_total2 %>% filter(State == input$text2)
+}
+    
+#Deciding legend(UrbanRural or NewExist) to be displayed on plot 
+feature_2 = input$feature2
+if (feature_2 == "UrbanRural"){
+  ggplot(sba_total2,aes(x = sba_total2$NoEmp, y = sba_total2$SBA_Appv, 
+                        color = factor(sba_total2$UrbanRural))) + 
+  geom_point() + 
+  xlab("Number of Employees") + 
+  ylab("Average Approved Amount of Loan") + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"), axis.text.x = element_text(face="bold"), axis.text.y = element_text(face="bold"), axis.ticks = element_blank()) + 
+  scale_color_manual(name = "Region", labels = c("Urban", "Rural"), values = c("orange", "blue"))
+}
+else if(feature_2 == "NewExist"){
+  ggplot(sba_total2,aes(x = sba_total2$NoEmp, y = sba_total2$SBA_Appv, 
+                        color = factor(sba_total2$NewExist))) + 
+  geom_point() + 
+  xlab("Number of Employees") + 
+  ylab("Average Approved Amount of Loan") + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"), axis.text.x = element_text(face="bold"), axis.text.y = element_text(face="bold"), axis.ticks = element_blank()) + 
+  scale_color_manual(name = "NewExist", labels = c("Existing Business", "New Business"), values = c("pink", "brown"))
+}
+  }) 
+  
+  #Plot for Year Trend
+  output$Plot3 = renderPlot({
+    #Filtering data for the third plot
+    sba_total3 = sba %>% select(State, Term, NoEmp, ApprovalFY, UrbanRural, NewExist, SBA_Appv) %>%
+          filter(input$slider_Term3[1] <= Term & Term <= input$slider_Term3[2],
+                 input$slider_NoEmp3[1] <= NoEmp & NoEmp <= input$slider_NoEmp3[2], 
+                 input$slider_ApprovalFY3[1] <= ApprovalFY & ApprovalFY <= input$slider_ApprovalFY3[2], 
+                 UrbanRural %in% input$category_13,
+                 NewExist %in% input$category_23)
+
+#Check state input, only accept state abbreviation
+if (nchar(input$text3) == 2){
+  sba_total3 = sba_total3 %>% filter(State == input$text3)
+}    
+
+    #Grouping data to find average loan amount of each year
+    ssba=sba_total3 %>% select(ApprovalFY, SBA_Appv) %>% group_by(ApprovalFY) %>% summarize(avg_loan = mean(SBA_Appv))
+ssbac=ssba[-nrow(ssba),]
+
+  #Plot for time series  
+  p_3 = ggplot(ssbac, aes(x=ApprovalFY, y=avg_loan)) + 
+  geom_line(color="blue") +
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"), axis.text.x = element_text(face="bold"), axis.text.y = element_text(face="bold"), axis.ticks = element_blank()) + 
+  scale_x_continuous(name = "Approval Year") + 
+  scale_y_continuous(name = "Average Approved Amount of Loan")
+  
+#if else statement for action button. Minimum point shows up when clicking odd number of times and disappear once clikcing even number of times.  
+  if (input$min %% 2 == 0){
+  p_3
+  }
+  else {
+  min_p = c(ssbac$ApprovalFY[ssbac$avg_loan == min(ssbac$avg_loan)], min(ssbac$avg_loan))
+  p_3 + annotate("point", x = min_p[1], y = min_p[2], color = "orange") + 
+    annotate("text", x = min_p[1], y = min_p[2], label = min_p[1], color = "orange", size = 8)
+  }
+  })
+}
+
+shinyApp(ui = ui, server = server)
+```

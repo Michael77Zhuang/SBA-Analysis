@@ -1,0 +1,202 @@
+---
+title: "DCGP 01 - Story Behind the Bad Debts"
+author: "Andrew Vanthournout, Michael Zhuang"
+date: "Due 10/26/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Abstract
+
+We conduct a multivariate analysis of SBA Loan Dataset, containing historical data of loan for small businesses within United States. The main method of this report includes logistic regression, classification analysis, and mapping. We focus on examining the effact of some popular objects in the charged-off rate, and we make analysis of the two highest influential variables over all states in United States.
+
+## Introduction
+
+Traditionally, bank loans take a variety of risks including credit risk, interest rate risk, liquidity risk, and so on. One important risk that prevents most small businesses or new businesses from getting loans is the credit risk, which is the risk that the loan won't be paid back on time or at all, and usually these businesses do not have enough credibility to borrow a large amount of loans that they need for developing the businesses. Nowadays, The United States Small Business Administration (SBA) offers help to these small businesses. The SBA doesn’t lend money directly to small business owners. Instead, it sets guidelines for loans made by its partnering lenders, usually the banks. The SBA reduces risk for lenders and makes it easier for them to access capital. That also makes it easier for small businesses to get loans. Even though SBA maks guaranty of capital return for lenders, it does not mean there is completely no risk. SBA still has to face the situation when a business is charged-off or, in other words, gives up paying back its loan. A thorough statistical analysis about factors of charged-off rate could help the SBA officers or bankers better understand the concepts behind the charged-off rate and make more accurate decisions in the future.
+
+The SBA Loans Data includes small business loans information from 1987 to 2014. The dataset includes 899,164 observations and 27 variables, which are broadly scoped and cover important information such as names of the businesses, their locations, loan approval date, loan default status, default amount, and also information of host banks. The data is provided by US Small Business Administration at www.sba.gov.
+
+In this report we investigate the factors which affect the charged-off rate and create a model to predict the charged-off rate among small businesses with their region (UrbanRural), business size (NoEmp), loan term (Term), new or exist (NewExist), and disbursement amount (DisbursementGross) using logistic regression. Specifically, we test the overall significance of each variable in this regression model, and apply this model to a testing data for checking the accuracy. Indeed, We also explore the two most influential variables for charged-off rate in our model across all states in United States. To assist in the exploration, we utilize visualizations of the locations and regions of the businesses and compute multivariate statistics for the variables.
+
+## Analysis
+
+```{r include=FALSE}
+library(tidyverse)
+library(dplyr)
+sba <- read_csv("https://uofi.box.com/shared/static/vi37omgitiaa2yyplrom779qvwk1g14x.csv", col_types = cols(ApprovalDate = col_date(format = "%d-%b-%y"), 
+                                                                                                            BalanceGross = col_number(), ChgOffDate = col_date(format = "%d-%b-%y"), 
+                                                                                                            ChgOffPrinGr = col_number(), DisbursementDate = col_date(format = "%d-%b-%y"), 
+                                                                                                            DisbursementGross = col_number(), ApprovalFY = col_integer(),
+                                                                                                            GrAppv = col_number(), SBA_Appv = col_number()))
+colnames(sba)=tolower(colnames(sba))
+#clean data by removing NAs
+subsba=sba%>%select(loannr_chkdgt,urbanrural,noemp,term,newexist,disbursementgross,
+                    mis_status)%>%filter(urbanrural==1|urbanrural==2,
+                                         newexist==1|newexist==2,
+                                         mis_status=="CHGOFF"|
+                                           mis_status=="P I F")%>%drop_na()
+subsba$mis_status=as.factor(subsba$mis_status)
+subsba$urbanrural=as.factor(subsba$urbanrural)
+subsba$newexist=as.factor(subsba$newexist)
+#creat training data and testing data
+set.seed(3975)
+train=subsba[sample(nrow(subsba),size=401581),]
+test=subsba[!subsba$loannr_chkdgt%in%train$loannr_chkdgt,]
+#check outliers
+fit0=glm(mis_status~urbanrural+noemp+term+newexist+disbursementgross,family = 
+          binomial(link = "logit"),data = train)
+plot(fit0, which = 4, id.n = 3)
+#final training data
+train2=train[-c(126458,257400,270548),]
+```
+
+The SBA loan data is a massive data with nearly 900 thousand observations, and these huge amount of resources tend to approve our initial hypothesis that the region of business, the size of business, the loan term, whether it's new or pre-existent, and the disbursement amount are all have more or less effect on the probability of a business to be charged-off. As the table below shows, all variables are significant in this regression model.
+
+```{r}
+fit=glm(mis_status~urbanrural+noemp+term+newexist+disbursementgross,family = 
+           binomial(link = "logit"),data = train2)
+summary(fit)$coefficients
+```
+
+The results of applying this model into testing data (random samples from 30% of the original SBA loan data) also support that whether a business would be charged-off is predictable, or at least inferable, according to these variables.
+
+```{r}
+test.prob=predict(fit,test,type = "response")
+test.pred=ifelse(test.prob > 0.5, "P I F", "CHGOFF")
+table(test.pred,test$mis_status)
+plot(as.factor(test.pred),test$mis_status,col=c("orange","lightblue"), xlab = "Predictions", ylab = "True Values", main = "Cross Validation Plot")
+text("63.5%", x = 0.055, y = 0.3, font = 2)
+text("81.54%", x = 0.55, y = 0.6, font = 2)
+mean(test.pred==test$mis_status) #overall correctness
+```
+
+This model correctly predicts about 63.5% of the business whose loan status is charged-off and 81.54% of the business whose loan status is pay-in-full. The overall correctness is about 79.56%, which is not perfect, but it still proves that there is some relationship between these variables and the charged-off rate. 
+
+Back to the regression model, the predictor variables, UrbanRural and NewExist, associate with the highest absolute values in their parameters, which are 0.3575 and -0.1058. This means that the estimated odds of loan status equals charged-off for the business in urban area is about 1.43 times the estimated odds for the business in rural area, which in other words, a business located in urban area is more likely to be charged-off than a business located in rural area. Also, the estimated odds of loan status equals charged-off for the existing business is about 0.9 times the estimated odds for the new business, which means a new business tend to have a higer possibility to be charged-off than a pre-existing business.
+
+These two highest influential variables drag our attention to the effects of region of the business and new or preexistent condition to the charged-off rate.
+
+```{r include=FALSE}
+library(ggplot2)
+library(usmap)
+sba <- read_csv("https://uofi.box.com/shared/static/vi37omgitiaa2yyplrom779qvwk1g14x.csv")
+Newcomp <- sba[sba$NewExist == 2,]
+CNewcomp <- Newcomp[Newcomp$MIS_Status == "CHGOFF",]
+existcomp <- sba[sba$NewExist == 1,]
+Cexistcomp <- existcomp[existcomp$MIS_Status == "CHGOFF",]
+rural <- sba[sba$UrbanRural == 2,]
+urban <- sba[sba$UrbanRural == 1,]
+Crural <- rural[rural$MIS_Status == "CHGOFF",]
+Curban <- urban[urban$MIS_Status == "CHGOFF",]
+genstat_table1 = data.frame("Status" = c("New Companies","Charge-offs (new)", "Existing Companies", "Charge-offs (existing)"), "Observations" = c(nrow(Newcomp),nrow(CNewcomp), nrow(existcomp),nrow(Cexistcomp)) )
+genstat_table2 = data.frame("Status" = c("Rural Companies", "Charge-offs (rural)", "Urban Companies", "Charge-offs (urban)"), "Observations" = c(nrow(rural), nrow(Crural), nrow(urban), nrow(Curban)))
+genstat_table3 = data.frame("Status" = c("New Companies", "Existing Companies", "Urban Companies", "Rural Companies"), "Charge-off Rates" = c(nrow(CNewcomp)/nrow(Newcomp), nrow(Cexistcomp)/nrow(existcomp),nrow(Curban)/nrow(urban),nrow(Crural)/nrow(rural)))
+obsbystate <- na.omit(sba %>% count(State))
+obsbystatenew <- na.omit(Newcomp %>% count(State))
+obsbystateexist <- na.omit(existcomp %>% count(State))
+Cobsbystatenew <- na.omit(CNewcomp %>% count(State))
+Cobsbystateexist <- na.omit(Cexistcomp %>% count(State))
+obsbystaterural <- na.omit(rural %>% count(State))
+obsbystateurban <- na.omit(urban %>% count(State))
+Cobsbystaterural <- na.omit(Crural %>% count(State))
+Cobsbystateurban <- na.omit(Curban %>% count(State))
+states_DC = c("AK","AL","AR","AZ","CA","CO","CT","DC","DE","FL","GA","HI","IA","ID","IL","IN","KS","KY","LA","MA","MD","ME","MI","MN","MO","MS","MT","NC","ND","NE","NH","NJ","NM","NV","NY","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VA","VT","WA","WI","WV","WY")
+frameobsbystate = data.frame("state" = states_DC, "observations" = obsbystate$n)
+frameobsbystatenew = data.frame("state" = states_DC, "observations" = obsbystatenew$n)
+frameobsbystateexist = data.frame("state" = states_DC, "observations" = obsbystateexist$n)
+frameCobsbystatenew = data.frame("state" = states_DC, "observations" = Cobsbystatenew$n)
+frameCobsbystateexist = data.frame("state" = states_DC, "observations" = Cobsbystateexist$n)
+frameobsbystaterural = data.frame("state" = states_DC, "observations" = obsbystaterural$n)
+frameobsbystateurban = data.frame("state" = states_DC, "observations" = obsbystateurban$n)
+frameCobsbystaterural = data.frame("state" = states_DC, "observations" = Cobsbystaterural$n)
+frameCobsbystateurban = data.frame("state" = states_DC, "observations" = Cobsbystateurban$n)
+ratebystatenew <-cbind(frameCobsbystatenew[1], frameCobsbystatenew[-1]/frameobsbystatenew[-1])
+ratebystateexist <- cbind(frameCobsbystateexist[1],frameCobsbystateexist[-1]/frameobsbystateexist[-1])
+ratedifference <- cbind("state" = states_DC, ratebystatenew[-1]-ratebystateexist[-1])
+rate_difference_newexist_negative <- ratedifference[ratedifference$observations < 0,]
+ratebystaterural <- cbind(frameCobsbystaterural[1],frameCobsbystaterural[-1]/frameobsbystaterural[-1])
+ratebystateurban <- cbind(frameCobsbystateurban[1],frameCobsbystateurban[-1]/frameobsbystateurban[-1])
+ratedifferenceUR <- cbind("state" = states_DC, ratebystateurban[-1]-ratebystaterural[-1])
+ratedifferenceUR_negative <- ratedifferenceUR[ratedifferenceUR$observations <0,]
+```
+
+```{r}
+genstat_table1
+genstat_table2
+```
+
+Here we have the overall number of observations for companies that are classified as new, pre-existing, urban, and rural, as well as the number of companies within each set that reached charge-off status (defaulted).
+
+```{r}
+genstat_table3
+```
+
+We now see all the default rates for companies under each of these classifications. We can see that the default rate (charged-off rate) is higher for new companies as opposed to pre-existing companies, and the default rate is higher for urban companies as opposed to rural companies.
+
+```{r}
+plot_usmap(data = ratebystatenew, value = "observations") + 
+  scale_fill_continuous(low = "white", high = "red", name = "Rate") +
+  labs(title = "Default Rate by state for newly formed companies") +
+  theme(legend.position = "right")
+
+plot_usmap(data = ratebystateexist, value = "observations") + 
+  scale_fill_continuous(low = "white", high = "red", name = "Rate") +
+  labs(title = "Default Rate by state for pre-existing companies") +
+  theme(legend.position = "right")
+```
+
+These maps show the default rate on a state by state basis for newly formed, and pre-existing companies. We can see that in general the map for pre-existing companies is lighter in shade than the map newly formed companies: this indicated that newly formed companies have a higher default rate than pre-existing companies. This observation is confirmed by our regression model as well as the general statistics tables above.
+
+```{r}
+plot_usmap(data = ratedifference, value = "observations") + 
+  scale_fill_continuous(low = "white", high = "green", name = "Rate difference") +
+  labs(title = "Difference in Chargeoff rate between New and Pre-existing companies") +
+  theme(legend.position = "right")
+```
+
+This map shows the difference in default rate between new and pre-existing companies on a state by state basis. States with a higher rate differnce have a greater default rate for new companies as opposed to pre-existing companies. The higher the rate is the greater the impact of this classification. States with a negative rate difference have a higher default rate for pre-existing companies as opposed to new companies, which does not follow our general trend. Only eleven states had a negative rate difference, in other words these eleven states saw greater loan payback success for new companies. Most of the states with negative rate difference have rates very close to zero meaning that new companies are barely more successful than pre-existing companies.
+
+```{r}
+states_negativeNE <- ratedifference[ratedifference$observations <0,]
+states_negativeNE
+```
+
+```{r}
+plot_usmap(data = ratebystaterural, value = "observations") + 
+  scale_fill_continuous(low = "white", high = "purple", name = "Rate") +
+  labs(title = "Default rate by state for rural companies") +
+  theme(legend.position = "right")
+
+plot_usmap(data = ratebystateurban, value = "observations") + 
+  scale_fill_continuous(low = "white", high = "purple", name = "Rate") +
+  labs(title = "Default rate by state for urban companies") +
+  theme(legend.position = "right")
+
+```
+
+Similar to the maps above, these maps show the default rates on a state by state basis for companies that are classified as urban and rural. In general the map for rural companies is lighter in shade than the map for urban companies indicating that urban companies default on their loans more often then rural companies. This result as well is confirmed by our regression model and our general statistics tables.
+
+```{r}
+plot_usmap(data = ratedifferenceUR, value = "observations") + 
+  scale_fill_continuous(low = "white", high = "green", name = "Rate difference") +
+  labs(title = "Difference in Chargeoff rate between Urban and Rural companies") +
+  theme(legend.position = "right")
+```
+
+This map shows the difference in default rate between urban and rural companies on a state by state basis. Similar to the map with rate difference for new and pre-existing companies this map shows the impact of the urban rural classification on default rate. States with a negative rate difference favor urban comapnies as opposed to rural companies which goes against our general trend. Only eight states favored urban companies. 
+
+```{r}
+states_negativeUR <- ratedifferenceUR[ratedifferenceUR$observations <0,]
+states_negativeUR
+```
+
+## Conclusion 
+
+In this report we examined which factors are most likely to affect the charge-off rates of companies receiving SBA loans. We conducted regression analysis on the following variables: urban/rural, number of employees, loan term, new/existing companies, and disbursement gross. From this analysis we found that the two most telling factors in predicting if a company will reach charge-off status are whether the company is based in an urban setting or a rural setting, and whether a company is newly founded or pre-existing. The model we built correctly predicts the data we tested with just under 80% accuracy (79.56%).
+
+We found that in general newly formed companies reach charge-off status more often than pre-existing companies, and that urban companies reach charge-off status more often than rural companies. We then confirmed this result with mapping visualizations and mean rates and found that some states are more affected by these factors than others.
+
+Further analysis could be done to examine how other variables included in the data set (such as NAICS, and franchise code) affect charge-off rates. Further we could do similar regression analysis on a state by state basis to further aid banks in their decisions to approve or deny a loan. A state by state analysis would help eliminate discrepancies in states that do not follow the general trend of favoring pre-existing companies in rural areas.  
